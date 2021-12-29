@@ -43,8 +43,8 @@ func (w *web) Run(st story.Story) {
 	}
 
 	h := newHandler(st,
-		WithTemplate(template.Must(template.New("").Parse(storyTmpl))),
-		WithParser(parser),
+		withTemplate(template.Must(template.New("").Parse(storyTmpl))),
+		withParser(parser),
 	)
 	mux.Handle(basepath, h)
 
@@ -52,28 +52,33 @@ func (w *web) Run(st story.Story) {
 	http.ListenAndServe(fmt.Sprintf(":%d", w.port), mux)
 }
 
-func WithParser(fn func(r *http.Request) string) HandlerOption {
+func withParser(fn func(r *http.Request) string) handlerOption {
 	return func(h *handler) {
 		h.pathFn = fn
 	}
 }
 
-func WithTemplate(t *template.Template) HandlerOption {
+func withTemplate(t *template.Template) handlerOption {
 	return func(h *handler) {
 		h.t = t
 	}
 }
 
-func newHandler(st story.Story, opts ...HandlerOption) http.Handler {
-	var h handler
-	h.st = st
+func newHandler(st story.Story, opts ...handlerOption) http.Handler {
+
+	tpl := template.Must(template.New("").Parse(storyTmpl))
+	parser := func(r *http.Request) string {
+		return defaultPathFn(r, "/")
+	}
+	h := handler{st, tpl, parser}
+
 	for _, opt := range opts {
 		opt(&h)
 	}
 	return h
 }
 
-type HandlerOption func(h *handler)
+type handlerOption func(h *handler)
 
 type handler struct {
 	st     story.Story
