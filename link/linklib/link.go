@@ -22,48 +22,62 @@ type Link struct {
 
 type Collection []Link
 
+func getAnchors(n *html.Node) []*html.Node {
+	log.Printf("Parsing for anchors")
+	if n.Type == html.ElementNode && n.Data == "a" {
+		log.Printf("Found an anchor: %s", n.Data)
+		return []*html.Node{n}
+	}
+	var ret []*html.Node
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		ret = append(ret, getAnchors(c)...)
+	}
+	return ret
+}
+
+func getLink(n *html.Node) Link {
+	log.Printf("Parsing anchor attributes")
+	var ret Link
+	for _, a := range n.Attr {
+		if a.Key == "href" {
+			log.Printf("Found href: %s", a.Val)
+			ret.Href = a.Val
+			break
+		}
+	}
+	ret.Text = getText(n)
+	return ret
+}
+
+func getText(n *html.Node) string {
+	log.Printf("Parsing anchor for text")
+	if n.Type == html.TextNode {
+		log.Printf("Found text: %s", n.Data)
+		return n.Data
+	}
+	if n.Type != html.ElementNode {
+		return ""
+	}
+	var ret string
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		ret += getText(c)
+	}
+	return strings.Join(strings.Fields(ret), " ")
+}
+
 func (e *Extractor) Extract(bytes []byte) Collection {
-	var c Collection
 
 	doc, err := html.Parse(strings.NewReader(string(bytes)))
 	if err != nil {
-		log.Fatalf("Error on parsiong: %s", err.Error())
+		log.Fatalf("Error on parsing: %s", err.Error())
 	}
 
-	var t func(n *html.Node, out string) string
-	t = func(n *html.Node, out string) string {
-		if n.Type == html.TextNode {
-			next := strings.Trim(n.Data, "\n")
-			if len(next) > 0 {
-				out = out + next
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			out = t(c, out)
-		}
-		return out
+	anchors := getAnchors(doc)
+	var c Collection
+
+	for _, anchor := range anchors {
+		c = append(c, getLink(anchor))
 	}
-
-	var f func(n *html.Node, out *Collection)
-	f = func(n *html.Node, out *Collection) {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			for _, a := range n.Attr {
-				if a.Key == "href" {
-
-					*out = append(*out, Link{
-						Href: a.Val,
-						Text: strings.TrimSpace(t(n, "")),
-					})
-				}
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			f(c, out)
-		}
-	}
-
-	f(doc, &c)
-
 	return c
 }
 
